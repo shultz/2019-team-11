@@ -57,7 +57,8 @@ class AddressModal extends Component {
                         variant="contained"
                         color="primary"
                         onClick={async () => {
-                            let hucId = await Location.getHucFromAddress(this.state.address);
+                            let locationInfo = await Location.getHucFromAddress(this.state.address);
+                            let hucId = locationInfo.hucId;
                             console.log("hucId: " + hucId);
 
                             // TODO hook up call and callback for ecoli data

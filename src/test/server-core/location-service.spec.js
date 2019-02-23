@@ -9,7 +9,7 @@ describe("LocationService", () => {
 
     it('address should get data', () => {
         return location.getHucFromAddress(addr).then((response) => {
-            expect(response).toBe("071000061703");
+            expect(response.hucId).toBe("071000061703");
         })
     })
 

@@ -7,7 +7,8 @@ import {
 } from "../constants_shared/layers";
 
 async function getData(address, layer) {
-    let huc = await loc.getHucFromAddress(address);
+    let locationData = await loc.getHucFromAddress(address);
+    let huc = locationData.hucId;
     let results;
 
     if (layer === FISH_LAYER) {

@@ -48,7 +48,11 @@ async function getWatershedData(location) {
             if (typeof response.data.features[0] === "undefined") {
                 return Promise.reject("watershed not found");
             }
-            return response.data.features[0].attributes.HUC12;
+            return {
+                hucId: response.data.features[0].attributes.HUC12,
+                lat: location.x,
+                lng: location.y
+            };
         });
 }
 
