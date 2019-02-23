@@ -1,70 +1,40 @@
-import convert from "xml-js";
 import axios from "axios";
 import {
     FIBI_URL,
     FIBI_BY_SITE_URL,
     EPA_URL,
-    WATERSHED_DATA_URL,
     SAMPLE_RESULTS_URL,
     ERROR_SHE_GET_WET
 } from "./constants/urls";
 // axios.defaults.timeout = 1000000000;
 
-class point {
-    constructor(){
-	this.locId = "";
-	this.name = "";
-	this.lat = 0.0;
-	this.long = 0.0;
-	this.datas = [];
-    }
-}
-
-class Data {
-    constructor(){
-	this.name = "";
-	this.unit = "";
-	this.value = 0.0;
-	this.date = "";
-	this.locId = "";
-    }
-}
-
-
 async function getEcoliData(huc) {
     let charName = "Escherichia%20coli";
-    let result = await getSampleResults(huc, charName);
-    // let locations = await getEpaStations(huc, charName);
+    let sampleResult = await getSampleResults(huc, charName);
+    let dataSamples = getValueDataFromXml(sampleResult.data)
 
-    let parsedResult = new DOMParser().parseFromString(result.data, "text/xml");
-    let activities = parsedResult.getElementsByTagName("Activity");
+    let locationResult = await getEpaStations(huc, charName);
+    let pointSamples = getLocationDataFromXml(locationResult.data)
 
-    let samples = new Map();
-    for (let activity of activities) {
-        let sample = {};
-        const getTagValue = qualifiedName => {
-            let tag = activity.getElementsByTagName(qualifiedName)[0];
-            return tag === undefined ? null : tag.childNodes[0].nodeValue;
-        };
-
-        sample.name = getTagValue("MonitoringLocationIdentifier");
-        sample.date = getTagValue("ActivityStartDate");
-        sample.value = getTagValue("ResultMeasureValue");
-
-        let existing = samples[sample.name];
-        if (
-            existing == null ||
-            Date.parse(sample.date) > Date.parse(existing.date)
-        ) {
-            samples.set(sample.name, sample);
+    //TODO: Need to combine the sample data to the locations
+    for (let key of pointSamples.keys()) {
+        let data = dataSamples.get(key);
+        if (data !== undefined) {
+            pointSamples.get(key).datas.push(data);
         }
     }
 
-    return samples;
+    return pointSamples;
 }
 
+
 async function getNitrateData(huc) {
-    return await getSampleResults(huc, "Nitrate");
+    let charName = "Nitrate";
+    let result =  await getSampleResults(huc, charName);
+    let locations = await getEpaStations(huc, charName);
+    let samples = GetDataFromXml(result.data)
+
+    return samples;
 }
 
 function getValueDataFromXml(xml) {
@@ -73,7 +43,7 @@ function getValueDataFromXml(xml) {
     let samples = new Map();
     for (let activity of activities) {
 	let sample = new Data();
-	
+
         const getTagValue = (qualifiedName) => {
             let tag = activity.getElementsByTagName(qualifiedName)[0];
             return (tag === undefined) ? null :tag.childNodes[0].nodeValue;
@@ -84,6 +54,53 @@ function getValueDataFromXml(xml) {
         sample.date = getTagValue("ActivityStartDate");
         sample.value = getTagValue("ResultMeasureValue");
 	sample.unit = getTagValue("MeasureUnitCode");
+
+        let existing = samples[sample.locId];
+        if (existing == null || (Date.parse(sample.date) > Date.parse(existing.date))) {
+            samples.set(sample.locId, sample);
+        }
+    }
+
+    return samples;
+}
+
+async function convertEsriGeometryPolygonToLatLngList() {
+    let request = await axios.get('https://watersgeo.epa.gov/arcgis/rest/services/NHDPlus_NP21/WBD_NP21_Simplified/MapServer/find?searchText=070600051004&contains=true&searchFields=&sr=&layers=huc_12&layerDefs=&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&dynamicLayers=&returnZ=false&returnM=false&gdbVersion=&returnUnformattedValues=false&returnFieldName=false&datumTransformations&layerParameterValues&mapRangeValues&layerRangeValues&f=pjson');
+    let esriGeometry = request.data;
+    let latLngList = [];
+    if (esriGeometry != null && esriGeometry.results != null && esriGeometry.results.length > 0
+        && esriGeometry.results[0].geometryType != null && esriGeometry.results[0].geometryType === ("esriGeometryPolygon")) {
+        esriGeometry.results[0].geometry.rings[0].forEach((lngLat) => {
+            latLngList.push({lat: lngLat[1], lng: lngLat[0]});
+        });
+    }
+
+    var dataCordsQueryParam = '';
+    for (var cords of latLngList) {
+        dataCordsQueryParam += cords.lng + ',' + cords.lat + ';'
+    }
+    dataCordsQueryParam = dataCordsQueryParam.substring(0, dataCordsQueryParam.length - 1); // remove final semicolon
+
+    let url = `http://epsg.io/trans?data=${dataCordsQueryParam}&s_srs=3857&t_srs=4326`
+    return await axios.get(url);
+}
+
+function getLocationDataFromXml(xml) {
+    let parsedResult = new DOMParser().parseFromString(xml, "text/xml");
+    let locations = parsedResult.getElementsByTagName("MonitoringLocation");
+    let samples = new Map();
+    for (let location of locations) {
+	let sample = new Point()
+
+        const getTagValue = (qualifiedName) => {
+            let tag = location.getElementsByTagName(qualifiedName)[0];
+            return (tag === undefined) ? null :tag.childNodes[0].nodeValue;
+        };
+
+        sample.locId = getTagValue("MonitoringLocationIdentifier");
+	sample.name = getTagValue("MonitoringLocationName");
+        sample.lat = getTagValue("LatitudeMeasure");
+        sample.long = getTagValue("LongitudeMeasure");
 
         let existing = samples[sample.locId];
         if (existing == null || (Date.parse(sample.date) > Date.parse(existing.date))) {
@@ -164,17 +181,15 @@ async function fetchFibiDataBySiteId(siteId) {
 async function getEpaStations(huc, characteristicName) {
     var url = EPA_URL;
     // TODO: externalize startDateLo from query
-    var query = `startDateLo=01-01-2017&huc=${huc}&mimeType=xml&characteristicName=Nitrate${characteristicName}`;
-    axios
+    var query = `startDateLo=01-01-2017&huc=${huc}&mimeType=xml&characteristicName=${characteristicName}`;
+    return axios
         .get(url + query)
         .then(function(response) {
             // handle success
-            console.log(response);
-            return convert.xml2json(response, { compact: true, spaces: 4 });
+            return response;
         })
         .catch(function(error) {
             // handle error
-            console.log(error);
             return ERROR_SHE_GET_WET;
         });
 }
@@ -194,5 +209,6 @@ export default {
     getFibiData,
     getEpaStations,
     getSampleResults,
-    getHuc
+    getHuc,
+    convertEsriGeometryPolygonToLatLngList
 };
