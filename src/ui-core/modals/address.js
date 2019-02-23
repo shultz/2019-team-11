@@ -60,6 +60,8 @@ class AddressModal extends Component {
                             let locationInfo = await Location.getHucFromAddress(this.state.address);
                             let hucId = locationInfo.hucId;
                             console.log("hucId: " + hucId);
+                            console.log("lat: " + locationInfo.lat);
+                            console.log("lng: "  + locationInfo.lng);
 
                             // TODO hook up call and callback for ecoli data
                             // let results = API.getData(this.state.address, SWIMMING_LAYER)
