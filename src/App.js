@@ -25,13 +25,20 @@ class App extends Component {
     constructor() {
         super();
         this.state = {
-            coordinatesList: []
+            coordinatesList: [],
+            selectedLocation: null
         };
     }
 
     setCoordinatesList(coordinatesList) {
         this.setState({
             coordinatesList
+        });
+    }
+
+    setSelectedLocation(selectedLocation) {
+        this.setState({
+            selectedLocation
         });
     }
 
@@ -61,7 +68,10 @@ class App extends Component {
                           fillColor="#0000FF"
                           fillOpacity={0.35} />
 
-                        <Marker position={{lat: 41.5839, lng: -93.6283}} />
+                        {/*Marker at the location the user entered*/}
+                        {this.state.selectedLocation != null &&
+                            <Marker position={this.state.selectedLocation} />
+                        }
 
                         <Marker
                           position={{lat: 41.5825, lng: -93.629}}
@@ -98,6 +108,9 @@ class App extends Component {
                       show={true}
                       setCoordinatesList={(coordinatesList) => {
                           this.setCoordinatesList(coordinatesList)
+                      }}
+                      setSelectedLocation={(selectedLocation) => {
+                          this.setSelectedLocation(selectedLocation)
                       }}
                     />
                 </div>
