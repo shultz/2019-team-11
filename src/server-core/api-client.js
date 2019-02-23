@@ -1,4 +1,6 @@
 import axios from "axios";
+import Point from "models/point.js";
+import Data from "models/data.js";
 import {
     FIBI_URL,
     FIBI_BY_SITE_URL,
